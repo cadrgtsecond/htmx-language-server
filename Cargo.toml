@@ -1,0 +1,12 @@
+[package]
+name = "htmx-language-server"
+description = "A language server for htmx"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+cc = "1.1.25"
+
+[dependencies]
+tree-sitter = "0.24.1"
+tree-sitter-html = "0.23.0"
