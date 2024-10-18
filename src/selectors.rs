@@ -1,9 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashMap,
-    error::Error,
-    fmt,
-};
+use std::{cell::RefCell, collections::HashMap, fmt};
 
 use cssparser::ToCss;
 use derive_more::Debug;
@@ -32,12 +27,12 @@ pub struct HTMLNode<'a> {
 impl<'a> HTMLNode<'a> {
     pub fn new(tree: Node<'a>, code: &'a str, cursor: TreeCursor<'a>) -> Self {
         assert_eq!(tree.kind(), "element");
-        let source = r#"
+        let source = "
           (start_tag
-              (tag_name) @tag_name
-              (attribute
-                  (attribute_name) @attr_name
-                  [(attribute_value) @attr_value (quoted_attribute_value (attribute_value) @attr_value)])*)"#;
+             (tag_name) @tag_name
+             (attribute
+                 (attribute_name) @attr_name
+                 [(attribute_value) @attr_value (quoted_attribute_value (attribute_value) @attr_value)])*)";
         let query = Query::new(&tree.language(), source).unwrap();
 
         let mut query_cursor = QueryCursor::new();
@@ -115,7 +110,7 @@ impl<'a> Select<'a> {
             next: element.clone(),
             seen: false,
             selectorlist,
-            nth_index_cache: Default::default(),
+            nth_index_cache: NthIndexCache::default(),
         }
     }
 }
@@ -167,11 +162,7 @@ impl<'a> Element for HTMLNode<'a> {
         if cursor.goto_parent() {
             let parent = cursor.node();
             if parent.kind() == "element" {
-                Some(HTMLNode::new(
-                    parent,
-                    self.code,
-                    cursor.clone(),
-                ))
+                Some(HTMLNode::new(parent, self.code, cursor.clone()))
             } else {
                 None
             }

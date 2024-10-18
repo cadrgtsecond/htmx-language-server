@@ -1,8 +1,10 @@
-use element::HTMLNode;
+#![warn(clippy::pedantic)]
+
+use selectors::HTMLNode;
 use std::{fs::File, io::Read, path::Path};
 use tree_sitter::Parser;
 
-mod element;
+mod selectors;
 
 fn main() {
     let mut parser = Parser::new();
