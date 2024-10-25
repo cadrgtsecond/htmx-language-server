@@ -11,7 +11,8 @@
                hx-trigger="search, keyup delay:200ms changed"
                hx-target="tbody"
                hx-push-url="true"
-               hx-indicator="#spinner"/>
+               hx-indicator="#spinner"
+               hx-/>
         <img style="height: 20px" id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg"/>
         <input type="submit" value="Search"/>
     </form>
@@ -58,5 +59,4 @@
           <img id="spinner" style="height: 20px"  class="htmx-indicator" src="/static/img/spinning-circles.svg"/>
         </span>
     </p>
-
 {% endblock %}

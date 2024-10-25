@@ -13,6 +13,8 @@ use selectors::{
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Node, Query, QueryCursor, TreeCursor};
 
+/// This struct wraps around a tree sitter [`Node`] in order to allow
+/// using [`selectors`] to query it
 #[derive(Debug, Clone)]
 pub struct HTMLNode<'a> {
     pub tree: Node<'a>,

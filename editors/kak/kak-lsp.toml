@@ -1,0 +1,5 @@
+[language_server.htmx-language-server]
+filetypes = ["html"]
+command = "bash"
+args = ["-c", "(cat stdout &);(cat > stdin)"]
+roots = []
