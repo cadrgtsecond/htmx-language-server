@@ -13,6 +13,8 @@ use selectors::{
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Node, Query, QueryCursor, TreeCursor};
 
+use crate::search;
+
 /// This struct wraps around a tree sitter [`Node`] in order to allow
 /// using [`selectors`] to query it
 #[derive(Debug, Clone)]
@@ -21,7 +23,7 @@ pub struct HTMLNode<'a> {
     #[debug("{:?}", &self.code[self.tree.start_byte()..self.tree.end_byte()])]
     pub code: &'a str,
     #[debug(skip)]
-    pub cursor: RefCell<TreeCursor<'a>>,
+    pub cursor: TreeCursor<'a>,
     pub tag_name: &'a str,
     pub attrs: HashMap<&'a str, &'a str>,
 }
@@ -59,7 +61,7 @@ impl<'a> HTMLNode<'a> {
         Self {
             tree,
             code,
-            cursor: RefCell::new(cursor),
+            cursor,
             tag_name: &code[tag_name.node.start_byte()..tag_name.node.end_byte()],
             attrs,
         }
@@ -87,68 +89,18 @@ impl<'a> HTMLNode<'a> {
     }
 
     /// Selects all elements matching `selector` in the tree
-    pub fn select(&self, selector: &str) -> Result<Select<'a>, String> {
+    pub fn select(&self, selector: &str) -> Result<impl Iterator<Item = HTMLNode<'_>>, String> {
         let mut parserinput = cssparser::ParserInput::new(selector);
         let mut parser = cssparser::Parser::new(&mut parserinput);
         let selectorlist = SelectorList::parse(&MyParser, &mut parser, ParseRelative::ForNesting)
             .map_err(|err| format!("Failed to parse selector: {err:?}"))?;
+        let search = search::Matches::new(self.cursor.clone(), move |node| {
+            node.kind() == "element"
+                && HTMLNode::new(node, self.code, self.cursor.clone())
+                    .matches(&selectorlist, Some(self))
+        });
 
-        Ok(Select::new(self, selectorlist))
-    }
-}
-
-pub struct Select<'a> {
-    root: HTMLNode<'a>,
-    next: HTMLNode<'a>,
-    seen: bool,
-    selectorlist: SelectorList<Simple>,
-    nth_index_cache: NthIndexCache,
-}
-
-impl<'a> Select<'a> {
-    fn new(element: &HTMLNode<'a>, selectorlist: SelectorList<Simple>) -> Self {
-        Self {
-            root: element.clone(),
-            next: element.clone(),
-            seen: false,
-            selectorlist,
-            nth_index_cache: NthIndexCache::default(),
-        }
-    }
-}
-
-impl<'a> Iterator for Select<'a> {
-    type Item = HTMLNode<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if !self.seen {
-                let ret = self.next.clone();
-
-                if let Some(child) = self.next.first_element_child() {
-                    self.next = child;
-                    self.seen = false;
-                } else {
-                    self.seen = true;
-                }
-
-                if ret.matches_with_cache(
-                    &self.selectorlist,
-                    Some(&self.root),
-                    &mut self.nth_index_cache,
-                ) {
-                    return Some(ret);
-                }
-            } else if let Some(sibling) = self.next.next_sibling_element() {
-                self.next = sibling;
-                self.seen = false;
-            } else if let Some(parent) = self.next.parent_element() {
-                self.next = parent;
-                self.seen = true;
-            } else {
-                return None;
-            }
-        }
+        Ok(search.map(|n| HTMLNode::new(n, self.code, self.cursor.clone())))
     }
 }
 
@@ -160,7 +112,7 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn parent_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.borrow_mut();
+        let mut cursor = self.cursor.clone();
         if cursor.goto_parent() {
             let parent = cursor.node();
             if parent.kind() == "element" {
@@ -186,23 +138,19 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn prev_sibling_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.borrow_mut();
+        let mut cursor = self.cursor.clone();
         loop {
             if !cursor.goto_previous_sibling() {
                 return None;
             }
             if cursor.node().kind() == "element" {
-                return Some(HTMLNode::new(
-                    cursor.node(),
-                    self.code,
-                    self.cursor.clone().into_inner(),
-                ));
+                return Some(HTMLNode::new(cursor.node(), self.code, self.cursor.clone()));
             }
         }
     }
 
     fn next_sibling_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.borrow_mut();
+        let mut cursor = self.cursor.clone();
         while cursor.goto_next_sibling() {
             if cursor.node().kind() == "element" {
                 return Some(HTMLNode::new(cursor.node(), self.code, cursor.clone()));
@@ -212,7 +160,7 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn first_element_child(&self) -> Option<Self> {
-        let mut cursor = self.cursor.borrow_mut();
+        let mut cursor = self.cursor.clone();
         if !cursor.goto_first_child() {
             return None;
         }

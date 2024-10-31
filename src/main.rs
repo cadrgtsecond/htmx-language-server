@@ -1,21 +1,23 @@
 #![warn(clippy::pedantic)]
 
-use log::{debug, info};
+use log::{error, info};
 use lsp_types::{
-    CompletionOptions, DidChangeTextDocumentParams, DidOpenTextDocumentParams,
-    HoverProviderCapability, PositionEncodingKind, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
+    CompletionOptions, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
+    HoverProviderCapability, Position, PositionEncodingKind, ServerCapabilities,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
+    WorkDoneProgressOptions,
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
-use tree_sitter::{Language, Tree};
+use tree_sitter::{Language, Point, Tree};
 
+mod search;
 mod selectors;
 
 /// Internal representation of a file
 struct File {
-    contents: Box<str>,
-    tree: Tree,
+    pub contents: Box<str>,
+    pub tree: Tree,
 }
 impl Debug for File {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -56,6 +58,13 @@ impl TextStore {
     }
 }
 
+pub fn position_to_point(p: Position) -> Point {
+    Point {
+        row: p.line as usize,
+        column: p.character as usize,
+    }
+}
+
 fn main() {
     env_logger::init();
 
@@ -75,19 +84,44 @@ fn main() {
         }),
         ..Default::default()
     };
-    let params = connection.initialize(
+    let _params = connection.initialize(
         serde_json::to_value(server_capabilities).expect("Failed to serialize server capabilities"),
     );
     let mut textstore = TextStore::new();
     loop {
         let msg = connection.receiver.recv().unwrap();
         match msg {
-            lsp_server::Message::Request(_r) => {}
+            lsp_server::Message::Request(r) => match r.method.as_str() {
+                "textDocument/hover" => {
+                    let Ok(params) = serde_json::from_value::<HoverParams>(r.params) else {
+                        error!("Invalid message");
+                        break;
+                    };
+                    let uri = params.text_document_position_params.text_document.uri;
+                    let Some(file) = textstore.0.get(&uri) else {
+                        error!("Unknown file uri: {:?}", uri);
+                        break;
+                    };
+                    let mut cursor = file.tree.walk();
+                    let node = search::for_deepest_matching(
+                        &mut cursor,
+                        &mut |node| {
+                            let point =
+                                position_to_point(params.text_document_position_params.position);
+                            node.start_position() < point && point < node.end_position()
+                        },
+                        &mut |_| true,
+                    );
+                    info!("{:?}", params.text_document_position_params.position);
+                    info!("On node: {:?}", node.map(|n| n.to_string()));
+                }
+                _ => {}
+            },
             lsp_server::Message::Notification(n) => match n.method.as_str() {
                 "textDocument/didOpen" => {
                     let Ok(params) = serde_json::from_value::<DidOpenTextDocumentParams>(n.params)
                     else {
-                        debug!("Invalid message");
+                        error!("Invalid message");
                         break;
                     };
                     textstore.update(
@@ -95,13 +129,12 @@ fn main() {
                         &get_tree_sitter_language(&params.text_document.language_id),
                         &params.text_document.text,
                     );
-                    debug!("{:?}", textstore.0.get(&params.text_document.uri).unwrap());
                 }
                 "textDocument/didChange" => {
                     let Ok(params) =
                         serde_json::from_value::<DidChangeTextDocumentParams>(n.params)
                     else {
-                        debug!("Invalid message");
+                        error!("Invalid message");
                         break;
                     };
                     // This should never unwrap since didOpen was called before
@@ -122,7 +155,6 @@ fn main() {
                             .expect("Invalid message")
                             .text,
                     );
-                    info!("{:?}", textstore.0.get(&params.text_document.uri).unwrap());
                 }
                 _ => {}
             },
