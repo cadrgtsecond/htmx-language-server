@@ -1,6 +1,7 @@
 #![warn(clippy::pedantic)]
 
 use log::{error, info};
+use lsp_server::Message;
 use lsp_types::{
     CompletionOptions, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
     HoverProviderCapability, Position, PositionEncodingKind, ServerCapabilities,
@@ -9,6 +10,7 @@ use lsp_types::{
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
+use thiserror::Error;
 use tree_sitter::{Language, Point, Tree};
 
 mod search;
@@ -65,6 +67,77 @@ pub fn position_to_point(p: Position) -> Point {
     }
 }
 
+#[derive(Debug, Error)]
+enum HandleMessageErr {
+    #[error("Failed to deserialize")]
+    FailedDeserialize(#[from] serde_json::Error),
+    #[error("Unknown file uri: {0:?}")]
+    BadUri(Uri),
+}
+fn handle_message(textstore: &mut TextStore, msg: Message) -> Result<(), HandleMessageErr> {
+    match msg {
+        #[allow(clippy::single_match)]
+        lsp_server::Message::Request(r) => match r.method.as_str() {
+            "textDocument/hover" => {
+                let params = serde_json::from_value::<HoverParams>(r.params)?;
+                let uri = params.text_document_position_params.text_document.uri;
+                let Some(file) = textstore.0.get(&uri) else {
+                    error!("Unknown file uri: {:?}", uri);
+                    return Err(HandleMessageErr::BadUri(uri));
+                };
+                let mut cursor = file.tree.walk();
+                let node = search::for_deepest_matching(
+                    &mut cursor,
+                    &mut |node| {
+                        let point =
+                            position_to_point(params.text_document_position_params.position);
+                        node.start_position() < point && point < node.end_position()
+                    },
+                    &mut |_| true,
+                );
+                info!("{:?}", params.text_document_position_params.position);
+                info!("On node: {:?}", node.map(|n| n.to_string()));
+            }
+            _ => {}
+        },
+        lsp_server::Message::Notification(n) => match n.method.as_str() {
+            "textDocument/didOpen" => {
+                let params = serde_json::from_value::<DidOpenTextDocumentParams>(n.params)?;
+                textstore.update(
+                    params.text_document.uri.clone(),
+                    &get_tree_sitter_language(&params.text_document.language_id),
+                    &params.text_document.text,
+                );
+            }
+            "textDocument/didChange" => {
+                let params = serde_json::from_value::<DidChangeTextDocumentParams>(n.params)?;
+                // This should never unwrap since didOpen was called before
+                let language = textstore
+                    .0
+                    .get(&params.text_document.uri)
+                    .unwrap()
+                    .tree
+                    .language()
+                    .clone();
+                // Only one change will be there because of the server capabilities
+                textstore.update(
+                    params.text_document.uri.clone(),
+                    &language,
+                    &params
+                        .content_changes
+                        .first()
+                        .expect("Invalid message")
+                        .text,
+                );
+            }
+            _ => {}
+        },
+
+        lsp_server::Message::Response(_) => {}
+    }
+    Ok(())
+}
+
 fn main() {
     env_logger::init();
 
@@ -90,76 +163,8 @@ fn main() {
     let mut textstore = TextStore::new();
     loop {
         let msg = connection.receiver.recv().unwrap();
-        match msg {
-            lsp_server::Message::Request(r) => match r.method.as_str() {
-                "textDocument/hover" => {
-                    let Ok(params) = serde_json::from_value::<HoverParams>(r.params) else {
-                        error!("Invalid message");
-                        break;
-                    };
-                    let uri = params.text_document_position_params.text_document.uri;
-                    let Some(file) = textstore.0.get(&uri) else {
-                        error!("Unknown file uri: {:?}", uri);
-                        break;
-                    };
-                    let mut cursor = file.tree.walk();
-                    let node = search::for_deepest_matching(
-                        &mut cursor,
-                        &mut |node| {
-                            let point =
-                                position_to_point(params.text_document_position_params.position);
-                            node.start_position() < point && point < node.end_position()
-                        },
-                        &mut |_| true,
-                    );
-                    info!("{:?}", params.text_document_position_params.position);
-                    info!("On node: {:?}", node.map(|n| n.to_string()));
-                }
-                _ => {}
-            },
-            lsp_server::Message::Notification(n) => match n.method.as_str() {
-                "textDocument/didOpen" => {
-                    let Ok(params) = serde_json::from_value::<DidOpenTextDocumentParams>(n.params)
-                    else {
-                        error!("Invalid message");
-                        break;
-                    };
-                    textstore.update(
-                        params.text_document.uri.clone(),
-                        &get_tree_sitter_language(&params.text_document.language_id),
-                        &params.text_document.text,
-                    );
-                }
-                "textDocument/didChange" => {
-                    let Ok(params) =
-                        serde_json::from_value::<DidChangeTextDocumentParams>(n.params)
-                    else {
-                        error!("Invalid message");
-                        break;
-                    };
-                    // This should never unwrap since didOpen was called before
-                    let language = textstore
-                        .0
-                        .get(&params.text_document.uri)
-                        .unwrap()
-                        .tree
-                        .language()
-                        .clone();
-                    // Only one change will be there because of the server capabilities
-                    textstore.update(
-                        params.text_document.uri.clone(),
-                        &language,
-                        &params
-                            .content_changes
-                            .first()
-                            .expect("Invalid message")
-                            .text,
-                    );
-                }
-                _ => {}
-            },
-
-            lsp_server::Message::Response(_) => {}
+        if let Err(err) = handle_message(&mut textstore, msg) {
+            error!("Error while handling message: {:?}", err);
         }
     }
 }
