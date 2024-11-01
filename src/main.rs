@@ -2,11 +2,12 @@
 
 use log::{error, info};
 use lsp_server::Message;
+use lsp_server::{Connection, Response};
 use lsp_types::{
-    CompletionOptions, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
+    CompletionItem, CompletionItemKind, CompletionList, CompletionOptions, CompletionParams,
+    CompletionResponse, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
     HoverProviderCapability, Position, PositionEncodingKind, ServerCapabilities,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
-    WorkDoneProgressOptions,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -67,16 +68,60 @@ pub fn position_to_point(p: Position) -> Point {
     }
 }
 
+const attributes: &[&str] = &[
+    "hx-get",
+    "hx-post",
+    "hx-delete",
+    "hx-put",
+    "hx-patch",
+    "hx-target",
+    "hx-trigger",
+    "hx-swap",
+    "hx-swap-oob",
+    "hx-include",
+    "hx-vals",
+    "hx-params",
+    "hx-select",
+    "hx-select-oob",
+    "hx-preserve",
+    "hx-disinherit",
+    "hx-inherit",
+    "hx-ext",
+    "hx-indicator",
+    "hx-on",
+    "hx-boost",
+    "hx-replace-url",
+    "hx-push-url",
+    "hx-history",
+    "hx-history-elt",
+    "hx-confirm",
+    "hx-prompt",
+    "hx-disable",
+    "hx-disabled-elt",
+    "hx-encoding",
+    "hx-headers",
+    "hx-request",
+    "hx-sync",
+    "hx-validate",
+    "hx-vars",
+];
+
 #[derive(Debug, Error)]
 enum HandleMessageErr {
     #[error("Failed to deserialize")]
     FailedDeserialize(#[from] serde_json::Error),
     #[error("Unknown file uri: {0:?}")]
     BadUri(Uri),
+    #[error("Failed to send response")]
+    SendError,
 }
-fn handle_message(textstore: &mut TextStore, msg: Message) -> Result<(), HandleMessageErr> {
+
+fn handle_message(
+    connection: &Connection,
+    textstore: &mut TextStore,
+    msg: Message,
+) -> Result<(), HandleMessageErr> {
     match msg {
-        #[allow(clippy::single_match)]
         lsp_server::Message::Request(r) => match r.method.as_str() {
             "textDocument/hover" => {
                 let params = serde_json::from_value::<HoverParams>(r.params)?;
@@ -97,6 +142,41 @@ fn handle_message(textstore: &mut TextStore, msg: Message) -> Result<(), HandleM
                 );
                 info!("{:?}", params.text_document_position_params.position);
                 info!("On node: {:?}", node.map(|n| n.to_string()));
+            }
+            "textDocument/completion" => {
+                let params = serde_json::from_value::<CompletionParams>(r.params)?;
+                let uri = params.text_document_position.text_document.uri;
+                let Some(file) = textstore.0.get(&uri) else {
+                    error!("Unknown file uri: {:?}", uri);
+                    return Err(HandleMessageErr::BadUri(uri));
+                };
+                let mut cursor = file.tree.walk();
+                let Some(node) = search::for_deepest_matching(
+                    &mut cursor,
+                    &mut |node| {
+                        let p = params.text_document_position.position;
+                        let point = Point {
+                            row: p.line as usize,
+                            column: p.character.saturating_sub(1) as usize,
+                        };
+                        node.start_position() < point && point < node.end_position()
+                    },
+                    &mut |_| true,
+                ) else {
+                    return Ok(());
+                };
+                let attr = &file.contents[node.start_byte()..node.end_byte()];
+                let response = CompletionResponse::Array(
+                    attributes
+                        .iter()
+                        .filter(|a| a.starts_with(attr))
+                        .map(|c| CompletionItem::new_simple(c.to_string(), "".into()))
+                        .collect(),
+                );
+                connection
+                    .sender
+                    .send(Message::Response(Response::new_ok(r.id, response)))
+                    .map_err(|_| HandleMessageErr::SendError)?;
             }
             _ => {}
         },
@@ -163,7 +243,7 @@ fn main() {
     let mut textstore = TextStore::new();
     loop {
         let msg = connection.receiver.recv().unwrap();
-        if let Err(err) = handle_message(&mut textstore, msg) {
+        if let Err(err) = handle_message(&connection, &mut textstore, msg) {
             error!("Error while handling message: {:?}", err);
         }
     }
