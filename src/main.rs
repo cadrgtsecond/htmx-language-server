@@ -16,6 +16,7 @@ use tree_sitter::{Language, Point, Tree};
 
 mod search;
 mod selectors;
+mod htmx;
 
 /// Internal representation of a file
 struct File {
@@ -67,44 +68,6 @@ pub fn position_to_point(p: Position) -> Point {
         column: p.character as usize,
     }
 }
-
-const attributes: &[&str] = &[
-    "hx-get",
-    "hx-post",
-    "hx-delete",
-    "hx-put",
-    "hx-patch",
-    "hx-target",
-    "hx-trigger",
-    "hx-swap",
-    "hx-swap-oob",
-    "hx-include",
-    "hx-vals",
-    "hx-params",
-    "hx-select",
-    "hx-select-oob",
-    "hx-preserve",
-    "hx-disinherit",
-    "hx-inherit",
-    "hx-ext",
-    "hx-indicator",
-    "hx-on",
-    "hx-boost",
-    "hx-replace-url",
-    "hx-push-url",
-    "hx-history",
-    "hx-history-elt",
-    "hx-confirm",
-    "hx-prompt",
-    "hx-disable",
-    "hx-disabled-elt",
-    "hx-encoding",
-    "hx-headers",
-    "hx-request",
-    "hx-sync",
-    "hx-validate",
-    "hx-vars",
-];
 
 #[derive(Debug, Error)]
 enum HandleMessageErr {
@@ -167,10 +130,10 @@ fn handle_message(
                 };
                 let attr = &file.contents[node.start_byte()..node.end_byte()];
                 let response = CompletionResponse::Array(
-                    attributes
+                  htmx::ATTRIBUTES
                         .iter()
                         .filter(|a| a.starts_with(attr))
-                        .map(|c| CompletionItem::new_simple(c.to_string(), "".into()))
+                        .map(|c| CompletionItem::new_simple((*c).to_string(), String::new()))
                         .collect(),
                 );
                 connection
