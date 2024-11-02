@@ -4,19 +4,19 @@ use log::{error, info};
 use lsp_server::Message;
 use lsp_server::{Connection, Response};
 use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionList, CompletionOptions, CompletionParams,
-    CompletionResponse, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
-    HoverProviderCapability, Position, PositionEncodingKind, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
+    CompletionItem, CompletionItemTag, CompletionOptions, CompletionParams, CompletionResponse,
+    CompletionTextEdit, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
+    HoverProviderCapability, Position, PositionEncodingKind, Range, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
 use thiserror::Error;
 use tree_sitter::{Language, Point, Tree};
 
+mod htmx;
 mod search;
 mod selectors;
-mod htmx;
 
 /// Internal representation of a file
 struct File {
@@ -79,6 +79,8 @@ enum HandleMessageErr {
     SendError,
 }
 
+// Its not that bad
+#[allow(clippy::too_many_lines)]
 fn handle_message(
     connection: &Connection,
     textstore: &mut TextStore,
@@ -130,10 +132,29 @@ fn handle_message(
                 };
                 let attr = &file.contents[node.start_byte()..node.end_byte()];
                 let response = CompletionResponse::Array(
-                  htmx::ATTRIBUTES
+                    htmx::ATTRIBUTES
                         .iter()
                         .filter(|a| a.starts_with(attr))
-                        .map(|c| CompletionItem::new_simple((*c).to_string(), String::new()))
+                        .map(|c| CompletionItem {
+                            label: (*c).to_string(),
+                            detail: htmx::DESCRIPTIONS.get(c).map(|c| (*c).to_string()),
+                            documentation: None,
+                            text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
+                                Range::new(
+                                    Position::new(
+                                        node.start_position().row.try_into().unwrap(),
+                                        node.start_position().column.try_into().unwrap(),
+                                    ),
+                                    Position::new(
+                                        node.end_position().row.try_into().unwrap(),
+                                        node.end_position().column.try_into().unwrap(),
+                                    ),
+                                ),
+                                (*c).to_string(),
+                            ))),
+                            tags: Some(vec![CompletionItemTag::DEPRECATED]),
+                            ..Default::default()
+                        })
                         .collect(),
                 );
                 connection
