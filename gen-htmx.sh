@@ -43,4 +43,3 @@ done
 cat >> src/htmx.rs <<EOF
 };
 EOF
-

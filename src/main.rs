@@ -1,19 +1,22 @@
 #![warn(clippy::pedantic)]
 
-use log::{error, info};
+use element::HTMLElement;
+use log::{error, info, warn};
 use lsp_server::Message;
 use lsp_server::{Connection, Response};
 use lsp_types::{
     CompletionItem, CompletionItemTag, CompletionOptions, CompletionParams, CompletionResponse,
-    CompletionTextEdit, DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams,
-    HoverProviderCapability, Position, PositionEncodingKind, Range, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
+    CompletionTextEdit, DiagnosticOptions, DiagnosticServerCapabilities,
+    DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams, HoverProviderCapability,
+    Position, PositionEncodingKind, Range, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Uri, WorkDoneProgressOptions,
 };
 use std::collections::HashMap;
 use std::fmt::Debug;
 use thiserror::Error;
 use tree_sitter::{Language, Point, Tree};
 
+mod element;
 mod htmx;
 mod search;
 mod selectors;
@@ -21,7 +24,7 @@ mod selectors;
 /// Internal representation of a file
 struct File {
     pub contents: Box<str>,
-    pub tree: Tree,
+    pub tree: HTMLElement,
 }
 impl Debug for File {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -41,7 +44,7 @@ impl File {
 
         File {
             contents: Box::from(contents),
-            tree,
+            tree: HTMLElement::new(tree),
         }
     }
 }
@@ -219,6 +222,14 @@ fn main() {
             },
             completion_item: None,
         }),
+        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+            identifier: Some("htmx-lsp".into()),
+            inter_file_dependencies: false,
+            workspace_diagnostics: false,
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: Some(false),
+            },
+        })),
         ..Default::default()
     };
     let _params = connection.initialize(

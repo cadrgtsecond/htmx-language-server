@@ -1,110 +1,19 @@
-use std::{cell::RefCell, collections::HashMap, fmt};
+use std::fmt;
 
 use cssparser::ToCss;
 use derive_more::Debug;
 use selectors::{
-    context::{
-        IgnoreNthChildForInvalidation, MatchingContext, MatchingMode, NeedsSelectorFlags,
-        QuirksMode,
-    },
-    parser::{self, ParseRelative, SelectorImpl, SelectorParseErrorKind},
-    Element, NthIndexCache, OpaqueElement, SelectorList,
+    parser::{self, SelectorImpl, SelectorParseErrorKind},
+    Element,
 };
-use streaming_iterator::StreamingIterator;
-use tree_sitter::{Node, Query, QueryCursor, TreeCursor};
+use string_cache::DefaultAtom;
 
-use crate::search;
+use crate::element::DOMTraverser;
 
-/// This struct wraps around a tree sitter [`Node`] in order to allow
-/// using [`selectors`] to query it
 #[derive(Debug, Clone)]
-pub struct HTMLNode<'a> {
-    pub tree: Node<'a>,
-    #[debug("{:?}", &self.code[self.tree.start_byte()..self.tree.end_byte()])]
-    pub code: &'a str,
-    #[debug(skip)]
-    pub cursor: TreeCursor<'a>,
-    pub tag_name: &'a str,
-    pub attrs: HashMap<&'a str, &'a str>,
-}
+struct ElementImpl<'a>(DOMTraverser<'a>);
 
-impl<'a> HTMLNode<'a> {
-    pub fn new(tree: Node<'a>, code: &'a str, cursor: TreeCursor<'a>) -> Self {
-        assert_eq!(tree.kind(), "element");
-        let source = "
-          (start_tag
-             (tag_name) @tag_name
-             (attribute
-                 (attribute_name) @attr_name
-                 [(attribute_value) @attr_value (quoted_attribute_value (attribute_value) @attr_value)])*)";
-        let query = Query::new(&tree.language(), source).unwrap();
-
-        let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree, code.as_bytes());
-        let current = matches.next().unwrap();
-
-        let c = &current.captures;
-        let tag_name = c.iter().find(|c| c.index == 0).unwrap();
-
-        let attrs = c
-            .iter()
-            .filter(|c| c.index == 1)
-            .zip(c.iter().filter(|c| c.index == 2))
-            .map(|(name, val)| {
-                (
-                    &code[name.node.start_byte()..name.node.end_byte()],
-                    &code[val.node.start_byte()..val.node.end_byte()],
-                )
-            })
-            .collect();
-
-        Self {
-            tree,
-            code,
-            cursor,
-            tag_name: &code[tag_name.node.start_byte()..tag_name.node.end_byte()],
-            attrs,
-        }
-    }
-
-    pub fn matches(&self, selector: &SelectorList<Simple>, scope: Option<&Self>) -> bool {
-        self.matches_with_cache(selector, scope, &mut NthIndexCache::default())
-    }
-    pub fn matches_with_cache(
-        &self,
-        selector: &SelectorList<Simple>,
-        scope: Option<&Self>,
-        cache: &mut NthIndexCache,
-    ) -> bool {
-        let mut context = MatchingContext::new(
-            MatchingMode::Normal,
-            None,
-            cache,
-            QuirksMode::NoQuirks,
-            NeedsSelectorFlags::No,
-            IgnoreNthChildForInvalidation::Yes,
-        );
-        context.scope_element = scope.map(OpaqueElement::new);
-        selectors::matching::matches_selector_list(selector, self, &mut context)
-    }
-
-    /// Selects all elements matching `selector` in the tree
-    pub fn select(&self, selector: &str) -> Result<impl Iterator<Item = HTMLNode<'_>>, String> {
-        let mut parserinput = cssparser::ParserInput::new(selector);
-        let mut parser = cssparser::Parser::new(&mut parserinput);
-        let selectorlist = SelectorList::parse(&MyParser, &mut parser, ParseRelative::ForNesting)
-            .map_err(|err| format!("Failed to parse selector: {err:?}"))?;
-        let search = search::Matches::new(self.cursor.clone(), move |node| {
-            node.kind() == "element"
-                && HTMLNode::new(node, self.code, self.cursor.clone())
-                    .matches(&selectorlist, Some(self))
-        });
-
-        Ok(search.map(|n| HTMLNode::new(n, self.code, self.cursor.clone())))
-    }
-}
-
-impl<'a> Element for HTMLNode<'a> {
+impl<'a> Element for ElementImpl<'a> {
     type Impl = Simple;
 
     fn opaque(&self) -> selectors::OpaqueElement {
@@ -112,19 +21,10 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn parent_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.clone();
-        if cursor.goto_parent() {
-            let parent = cursor.node();
-            if parent.kind() == "element" {
-                Some(HTMLNode::new(parent, self.code, cursor.clone()))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        self.0.goto_parent().map(ElementImpl)
     }
 
+    // TODO: Implement `facet` or declarative-shadow-dom
     fn parent_node_is_shadow_root(&self) -> bool {
         false
     }
@@ -138,38 +38,15 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn prev_sibling_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.clone();
-        loop {
-            if !cursor.goto_previous_sibling() {
-                return None;
-            }
-            if cursor.node().kind() == "element" {
-                return Some(HTMLNode::new(cursor.node(), self.code, self.cursor.clone()));
-            }
-        }
+        self.0.goto_prev_sibling().map(ElementImpl)
     }
 
     fn next_sibling_element(&self) -> Option<Self> {
-        let mut cursor = self.cursor.clone();
-        while cursor.goto_next_sibling() {
-            if cursor.node().kind() == "element" {
-                return Some(HTMLNode::new(cursor.node(), self.code, cursor.clone()));
-            }
-        }
-        None
+        self.0.goto_next_sibling().map(ElementImpl)
     }
 
     fn first_element_child(&self) -> Option<Self> {
-        let mut cursor = self.cursor.clone();
-        if !cursor.goto_first_child() {
-            return None;
-        }
-        while cursor.goto_next_sibling() {
-            if cursor.node().kind() == "element" {
-                return Some(HTMLNode::new(cursor.node(), self.code, cursor.clone()));
-            }
-        }
-        None
+        self.0.goto_first_child().map(ElementImpl)
     }
 
     fn is_html_element_in_html_document(&self) -> bool {
@@ -177,7 +54,7 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn has_local_name(&self, local_name: &<Self::Impl as SelectorImpl>::BorrowedLocalName) -> bool {
-        local_name.0 == self.tag_name
+        *local_name.0 == *self.0.curr.tag_name
     }
 
     fn has_namespace(&self, _ns: &<Self::Impl as SelectorImpl>::BorrowedNamespaceUrl) -> bool {
@@ -185,7 +62,7 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn is_same_type(&self, other: &Self) -> bool {
-        self.tag_name == other.tag_name
+        *self.0.curr.tag_name == *other.0.curr.tag_name
     }
 
     fn attr_matches(
@@ -196,7 +73,7 @@ impl<'a> Element for HTMLNode<'a> {
             &<Self::Impl as SelectorImpl>::AttrValue,
         >,
     ) -> bool {
-        let Some(attr) = self.attrs.get(local_name.0.as_str()) else {
+        let Some(attr) = self.0.curr.attrs.get(&DefaultAtom::from(local_name.0.as_str())) else {
             return false;
         };
         operation.eval_str(attr)
@@ -221,7 +98,7 @@ impl<'a> Element for HTMLNode<'a> {
     fn apply_selector_flags(&self, _flags: selectors::matching::ElementSelectorFlags) {}
 
     fn is_link(&self) -> bool {
-        self.tag_name == "link"
+        *self.0.curr.tag_name == *"a"
     }
 
     fn is_html_slot_element(&self) -> bool {
@@ -234,7 +111,7 @@ impl<'a> Element for HTMLNode<'a> {
         case_sensitivity: selectors::attr::CaseSensitivity,
     ) -> bool {
         case_sensitivity.eq(
-            self.attrs.get("id").unwrap_or(&"").as_bytes(),
+            self.0.curr.attrs.get(&DefaultAtom::from("id")).unwrap_or(&String::from("")).as_bytes(),
             id.0.as_bytes(),
         )
     }
@@ -244,7 +121,7 @@ impl<'a> Element for HTMLNode<'a> {
         name: &<Self::Impl as SelectorImpl>::Identifier,
         case_sensitivity: selectors::attr::CaseSensitivity,
     ) -> bool {
-        let Some(classes) = self.attrs.get("class") else {
+        let Some(classes) = self.0.curr.attrs.get(&DefaultAtom::from("class")) else {
             return false;
         };
         classes
@@ -264,11 +141,11 @@ impl<'a> Element for HTMLNode<'a> {
     }
 
     fn is_empty(&self) -> bool {
-        self.tree.child(2).is_none()
+        self.0.curr.children.is_empty()
     }
 
     fn is_root(&self) -> bool {
-        self.tree.parent().map(|p| p.kind()) == Some("document")
+        *self.0.curr.tag_name == *"html"
     }
 }
 
