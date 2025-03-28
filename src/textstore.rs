@@ -1,6 +1,6 @@
 use log::warn;
 use lsp_types::Uri;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Pointer};
 use tl::{HTMLTag, ParserOptions, VDom};
 
 #[derive(Debug)]
@@ -74,7 +74,25 @@ impl FileData {
             Err(i) => i - 1,
         };
         if let tl::Node::Tag(tag) = &self.dom.nodes()[i] {
-            Some(HTMLObject::Tag(tag.name().try_as_utf8_str()?))
+            // See if any attribute key matches
+            // We can't do binary search here
+            tag.attributes()
+                .unstable_raw()
+                .iter()
+                .find_map(|(key, val)| {
+                    let key = key.try_as_utf8_str().unwrap();
+                    let val = val.as_ref()?.try_as_utf8_str().unwrap();
+                    let key_diff = str_ptr_offset(&self.data, key);
+                    let val_diff = str_ptr_offset(&self.data, val);
+                    if (key_diff..(key_diff + key.len())).contains(&off) {
+                        Some(HTMLObject::Attr(key))
+                    } else if (val_diff..(val_diff + val.len())).contains(&off) {
+                        Some(HTMLObject::AttrValue(val))
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| Some(HTMLObject::Tag(tag.name().try_as_utf8_str()?)))
         } else {
             None
         }
