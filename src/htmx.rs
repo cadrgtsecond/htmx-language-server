@@ -41,6 +41,9 @@ pub static ATTRIBUTES: &[&str] = &[
 pub static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
     "hx-get" =>
 r###"issues a GET to the specified URL
+description = """\
+  The hx-get attribute in htmx will cause an element to issue a GET request to the specified URL and swap the returned \
+  HTML into the DOM using a swap strategy."""
 
 The `hx-get` attribute will cause an element to issue a `GET` to the specified URL and swap
 the HTML into the DOM using a swap strategy:
@@ -55,8 +58,9 @@ This example will cause the `button` to issue a `GET` to `/example` and swap the
 ### Notes
 
 * `hx-get` is not inherited
-* By default `hx-get` does not include any parameters.  You can use the [hx-params](@/attributes/hx-params.md)
+* By default `hx-get` usually does not include any parameters.  You can use the [hx-params](@/attributes/hx-params.md)
   attribute to change this
+    * NB: If the element with the `hx-get` attribute also has a value, this will be included as a parameter unless explicitly removed
 * You can control the target of the swap using the [hx-target](@/attributes/hx-target.md) attribute
 * You can control the swap strategy by using the [hx-swap](@/attributes/hx-swap.md) attribute
 * You can control what event triggers the request with the [hx-trigger](@/attributes/hx-trigger.md) attribute
@@ -64,6 +68,9 @@ This example will cause the `button` to issue a `GET` to `/example` and swap the
 * An empty `hx-get:""` will make a get request to the current url and will swap the current HTML page "###,
     "hx-post" =>
 r###"issues a POST to the specified URL
+description = """\
+  The hx-post attribute in htmx will cause an element to issue a POST request to the specified URL and swap the \
+  returned HTML into the DOM using a swap strategy."""
 
 The `hx-post` attribute will cause an element to issue a `POST` to the specified URL and swap
 the HTML into the DOM using a swap strategy:
@@ -89,6 +96,9 @@ r###"handle events with inline scripts on elements
 404: Not Found"###,
     "hx-push-url" =>
 r###"push a URL into the browser location bar to create history
+description = """\
+  The hx-push-url attribute in htmx allows you to push a URL into the browser location history. This creates a new \
+  history entry, allowing navigation with the browser's back and forward buttons."""
 
 The `hx-push-url` attribute allows you to push a URL into the browser [location history](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 This creates a new history entry, allowing navigation with the browser’s back and forward buttons.
@@ -128,6 +138,7 @@ This will push the URL `/account/home' into the location history.
 * The [`hx-history-elt` attribute](@/attributes/hx-history-elt.md) allows changing which element is saved in the history cache."###,
     "hx-select" =>
 r###"select content to swap in from a response
+description = "The hx-select attribute in htmx allows you to select the content you want swapped from a response."
 
 The `hx-select` attribute allows you to select the content you want swapped from a response.  The value of
 this attribute is a CSS query selector of the element or elements to select from the response.
@@ -150,6 +161,9 @@ which will replace the entire button in the DOM.
 * `hx-select` is inherited and can be placed on a parent element"###,
     "hx-select-oob" =>
 r###"select content to swap in from a response, somewhere other than the target (out of band)
+description = """\
+  The hx-select-oob attribute in htmx allows you to select content from a response to be swapped in via an out-of-band \
+  swap. The value of this attribute is comma separated list of elements to be swapped out of band."""
 
 The `hx-select-oob` attribute allows you to select content from a response to be swapped in via an out-of-band swap.  
 The value of this attribute is comma separated list of elements to be swapped out of band.  This attribute is almost
@@ -174,7 +188,7 @@ which will replace the entire button in the DOM, and, in addition, pick out an e
 in the response and swap it in for div in the DOM with the same ID.
 
 Each value in the comma separated list of values can specify any valid [`hx-swap`](@/attributes/hx-swap.md)
-strategy by separating the selector and the swap strategy with a `:`.
+strategy by separating the selector and the swap strategy with a `:`, with the strategy otherwise defaulting to `outerHTML`.
 
 For example, to prepend the alert content instead of replacing it:
 
@@ -195,6 +209,9 @@ For example, to prepend the alert content instead of replacing it:
 * `hx-select-oob` is inherited and can be placed on a parent element"###,
     "hx-swap" =>
 r###"controls how content will swap in (outerHTML, beforeend, afterend, …)
+description = """\
+  The hx-swap attribute in htmx allows you to specify the 'swap strategy', or how the response will be swapped in \
+  relative to the target of an AJAX request. The default swap strategy is `innerHTML`."""
 
 The `hx-swap` attribute allows you to specify how the response will be swapped in relative to the
 [target](@/attributes/hx-target.md) of an AJAX request. If you do not specify the option, the default is
@@ -342,9 +359,13 @@ Alternatively, if you want the page to automatically scroll to the focused eleme
 * The default settle delay is 20ms"###,
     "hx-swap-oob" =>
 r###"mark element to swap in from a response (out of band)
+description = """\
+  The hx-swap-oob attribute in htmx allows you to specify that some content in a response should be swapped into the \
+  DOM somewhere other than the target, that is 'out-of-band'. This allows you to piggyback updates to other elements \
+  on a response."""
 
 The `hx-swap-oob` attribute allows you to specify that some content in a response should be
-swapped into the DOM somewhere other than the target, that is "Out of Band".  This allows you to piggy back updates to other element updates on a response.
+swapped into the DOM somewhere other than the target, that is "Out of Band".  This allows you to piggyback updates to other element updates on a response.
 
 Consider the following response HTML:
 
@@ -413,7 +434,7 @@ A `<p>` can be encapsulated in `<div>` or `<span>`:
 Note that you can use a `template` tag to encapsulate types of elements that, by the HTML spec, can't stand on their own in the
 DOM (`<tr>`, `<td>`, `<th>`, `<thead>`, `<tbody>`, `<tfoot>`, `<colgroup>`, `<caption>`, `<col>` & `<li>`).
 
-Here is an example with an out of band swap of a table row being encapsulated in this way:
+Here is an example with an out-of-band swap of a table row being encapsulated in this way:
 
 ```html
 <div>
@@ -432,7 +453,7 @@ Note that these template tags will be removed from the final content of the page
 
 Some element types, like SVG, use a specific XML namespace for their child elements. This prevents internal elements from working correctly when swapped in, unless they are encapsulated within a `svg` tag. To modify the internal contents of an existing SVG, you can use both `template` and `svg` tags to encapsulate the elements, allowing them to get the correct namespace applied.
 
-Here is an example with an out of band swap of svg elements being encapsulated in this way:
+Here is an example with an out-of-band swap of svg elements being encapsulated in this way:
 
 ```html
 <div>
@@ -452,7 +473,7 @@ Note that these `template` and `svg` wrapping tags will be removed from the fina
 ## Nested OOB Swaps
 
 By default, any element with `hx-swap-oob=` attribute anywhere in the response is processed for oob swap behavior, including when an element is nested within the main response element.
-This can be problematic when using [template fragments](https://htmx.org/essays/template-fragments/) where a fragment may be reused as a oob-swap target and also as part of a bigger fragment. When the bigger fragment is the main response the inner fragment will still be processed as an oob swap, removing it from the dom.
+This can be problematic when using [template fragments](https://htmx.org/essays/template-fragments/) where a fragment may be reused as an oob-swap target and also as part of a bigger fragment. When the bigger fragment is the main response the inner fragment will still be processed as an oob swap, removing it from the dom.
 
 This behavior can be changed by setting the config `htmx.config.allowNestedOobSwaps` to `false`. If this config option is `false`, OOB swaps are only processed when the element is *adjacent to* the main response element, OOB swaps elsewhere will be ignored and oob-swap-related attributes stripped.
 
@@ -461,6 +482,9 @@ This behavior can be changed by setting the config `htmx.config.allowNestedOobSw
 * `hx-swap-oob` is not inherited"###,
     "hx-target" =>
 r###"specifies the target element to be swapped
+description = """\
+  The hx-target attribute in htmx allows you to target a different element for swapping than the one issuing the AJAX \
+  request."""
 
 The `hx-target` attribute allows you to target a different element for swapping than the one issuing the AJAX
 request.  The value of this attribute can be:
@@ -476,7 +500,7 @@ request.  The value of this attribute can be:
   (e.g. `next .error` will target the closest following sibling element with `error` class)
 * `previous` which resolves to [element.previousElementSibling](https://developer.mozilla.org/docs/Web/API/Element/previousElementSibling)
 * `previous <CSS selector>` which will scan the DOM backwards for the first element that matches the given CSS selector.
-  (e.g `previous .error` will target the closest previous sibling with `error` class)
+  (e.g. `previous .error` will target the closest previous sibling with `error` class)
 
 
 Here is an example that targets a div:
@@ -502,6 +526,11 @@ This example uses `hx-target="this"` to make a link that updates itself when cli
 * `hx-target` is inherited and can be placed on a parent element"###,
     "hx-trigger" =>
 r###"specifies the event that triggers the request
+description = """\
+  The hx-trigger attribute in htmx allows you to specify what triggers an AJAX request. Supported triggers include \
+  standard DOM events, custom events, polling intervals, and event modifiers. The hx-trigger attribute also allows \
+  specifying event filtering, timing controls, event bubbling, and multiple trigger definitions for fine-grained \
+  control over when and how requests are initiated."""
 
 The `hx-trigger` attribute allows you to specify what triggers an AJAX request.  A trigger
 value can be one of the following:
@@ -511,6 +540,8 @@ value can be one of the following:
 * A comma-separated list of such events
 
 ### Standard Events
+
+Standard events refer to [web API events](https://developer.mozilla.org/en-US/docs/Web/API/Element#events) (e.g. click, keydown, mouseup, load).
 
 A standard event, such as `click` can be specified as the trigger like so:
 
@@ -550,7 +581,7 @@ for a global symbol with the name `foo`
 Standard events can also have modifiers that change how they behave.  The modifiers are:
 
 * `once` - the event will only trigger once (e.g. the first click)
-* `changed` - the event will only change if the value of the element has changed. Please pay attention `change` is the name of the event and `changed` is the name of the modifier.
+* `changed` - the event will only fire if the value of the element has changed. Please pay attention `change` is the name of the event and `changed` is the name of the modifier.
 * `delay:<timing declaration>` - a delay will occur before an event triggers a request.  If the event
 is seen again it will reset the delay.
 * `throttle:<timing declaration>` - a throttle will occur after an event triggers a request. If the event
@@ -568,7 +599,7 @@ is seen again before the delay completes, it is ignored, the element will trigge
       (e.g. `next .error` will target the closest following sibling element with `error` class)
     * `previous` resolves to [element.previousElementSibling](https://developer.mozilla.org/docs/Web/API/Element/previousElementSibling)
     * `previous <CSS selector>` scans the DOM backwards for the first element that matches the given CSS selector.
-      (e.g `previous .error` will target the closest previous sibling with `error` class)
+      (e.g. `previous .error` will target the closest previous sibling with `error` class)
 * `target:<CSS selector>` - allows you to filter via a CSS selector on the target of the event.  This can be useful when you want to listen for
 triggers from elements that might not be in the DOM at the point of initialization, by, for example, listening on the body,
 but with a target filter for a child element
@@ -580,12 +611,12 @@ but with a target filter for a child element
   * `all` - queue all events (issue a request for each event)
   * `none` - do not queue new events
 
-Here is an example of a search box that searches on `keyup`, but only if the search value has changed
+Here is an example of a search box that searches on `input`, but only if the search value has changed
 and the user hasn't typed anything new for 1 second:
 
 ```html
 <input name="q"
-       hx-get="/search" hx-trigger="keyup changed delay:1s"
+       hx-get="/search" hx-trigger="input changed delay:1s"
        hx-target="#search-results"/>
 ```
 
@@ -655,9 +686,12 @@ The AJAX request can be triggered via JavaScript [`htmx.trigger()`](@/api.md#tri
 
 * `hx-trigger` is not inherited
 * `hx-trigger` can be used without an AJAX request, in which case it will only fire the `htmx:trigger` event
-* In order to pass a CSS selector that contains whitespace (e.g. `form input`) to the `from`- or `target`-modifier, surround the selector in parentheses or curly brackets (e.g. `from:(form input)` or `from:closest (form input)`)"###,
+* In order to pass a CSS selector that contains whitespace (e.g. `form input`) to the `from`- or `target`-modifier, surround the selector in parentheses or curly brackets (e.g. `from:(form input)` or `from:closest (form input)`)
+* A reset event in hx-trigger (e.g. hx-trigger="change, reset") might not work as intended, since HTMX builds its values and sends a request before the browser resets the form values. As a workaround, add a delay to let the browser reset the form before making the request (e.g. hx-trigger="change, reset delay:0.01s"). "###,
     "hx-vals" =>
 r###"add values to submit with the request (JSON format)
+description = """\
+  The hx-vals attribute in htmx allows you to add to the parameters that will be submitted with an AJAX request."""
 
 The `hx-vals` attribute allows you to add to the parameters that will be submitted with an AJAX request.
 
@@ -702,6 +736,10 @@ In this example, if `foo()` returns an object like `{name: "John", age: 30}`, bo
 * Input values with the same name will be overridden by variable declarations."###,
     "hx-boost" =>
 r###"add progressive enhancement for links and forms
+description = """\
+  The hx-boost attribute in htmx enables progressive enhancement by converting standard HTML anchors and forms into \
+  AJAX requests, maintaining graceful fallback for users without JavaScript while providing modern dynamic page \
+  updates for those with JavaScript enabled."""
 
 The `hx-boost` attribute allows you to "boost" normal anchors and form tags to use AJAX instead.  This
 has the [nice fallback](https://en.wikipedia.org/wiki/Progressive_enhancement) that, if the user does not 
@@ -748,6 +786,10 @@ This form will issue an ajax `POST` to the given URL and replace the body's inne
 * Disable the replacement of elements via boost, and their children, with [`hx-preserve="true"`](@/attributes/hx-preserve.md)"###,
     "hx-confirm" =>
 r###"shows a confirm() dialog before issuing a request
+description = """\
+  The hx-confirm attribute in htmx provides a way to add confirmation dialogs before executing requests, allowing \
+  you to protect users from accidental destructive actions. This documentation explains how to implement confirmation \
+  prompts and customize their behavior through event handling."""
 
 The `hx-confirm` attribute allows you to confirm an action before issuing a request.  This can be useful
 in cases where the action is destructive and you want to ensure that the user really wants to do it.
@@ -775,6 +817,9 @@ The event triggered by `hx-confirm` contains additional properties in its `detai
 * a boolean `skipConfirmation` can be passed to the `issueRequest` callback; if true (defaults to false), the `window.confirm` will not be called and the AJAX request is issued directly"###,
     "hx-delete" =>
 r###"issues a DELETE to the specified URL
+description = """\
+  The hx-delete attribute in htmx will cause an element to issue a DELETE request to the specified URL and swap the \
+  returned HTML into the DOM using a swap strategy."""
 
 The `hx-delete` attribute will cause an element to issue a `DELETE` to the specified URL and swap
 the HTML into the DOM using a swap strategy:
@@ -798,6 +843,7 @@ This example will cause the `button` to issue a `DELETE` to `/account` and swap 
 * To remove the element following a successful `DELETE`, return a `200` status code with an empty body; if the server responds with a `204`, no swap takes place, documented here: [Requests & Responses](@/docs.md#requests)"###,
     "hx-disable" =>
 r###"disables htmx processing for the given node and any children nodes
+description = "The hx-disable attribute in htmx will disable htmx processing for a given element and all its children."
 
 The `hx-disable` attribute will disable htmx processing for a given element and all its children.  This can be 
 useful as a backup for HTML escaping, when you include user generated content in your site, and you want to 
@@ -810,6 +856,9 @@ The value of the tag is ignored, and it cannot be reversed by any content beneat
 * `hx-disable` is inherited"###,
     "hx-disabled-elt" =>
 r###"adds the disabled attribute to the specified elements while a request is in flight
+description = """\
+  The hx-disabled-elt attribute in htmx allows you to specify elements that will have the `disabled` attribute added \
+  to them for the duration of the request."""
 
 The `hx-disabled-elt` attribute allows you to specify elements that will have the `disabled` attribute
 added to them for the duration of the request. The value of this attribute can be:
@@ -825,7 +874,7 @@ added to them for the duration of the request. The value of this attribute can b
   (e.g. `next button` will disable the closest following sibling `button` element)
 * `previous` which resolves to [element.previousElementSibling](https://developer.mozilla.org/docs/Web/API/Element/previousElementSibling)
 * `previous <CSS selector>` which will scan the DOM backwards for the first element that matches the given CSS selector.
-  (e.g `previous input` will disable the closest previous sibling `input` element)
+  (e.g. `previous input` will disable the closest previous sibling `input` element)
 
 Here is an example with a button that will disable itself during a request:
 
@@ -854,6 +903,10 @@ The `hx-disabled-elt` attribute also supports specifying multiple CSS selectors 
 [hx-trigger]: https://htmx.org/attributes/hx-trigger/"###,
     "hx-disinherit" =>
 r###"control and disable automatic attribute inheritance for child nodes
+description = """\
+  The hx-disinherit attribute in htmx lets you control how child elements inherit attributes from their parents. This \
+  documentation explains how to selectively disable inheritance of specific htmx attributes or all attributes, \
+  allowing for more granular control over your web application's behavior."""
 
 The default behavior for htmx is to "inherit" many attributes automatically: that is, an attribute such as
 [hx-target](@/attributes/hx-target.md) may be placed on a parent element, and all child elements will inherit
@@ -900,6 +953,10 @@ htmx evaluates attribute inheritance as follows:
 * Read more about [Attribute Inheritance](@/docs.md#inheritance)"###,
     "hx-encoding" =>
 r###"changes the request encoding type
+description = """\
+  The hx-encoding attribute in htmx allows you to switch the request encoding from the usual \
+  `application/x-www-form-urlencoded` encoding to `multipart/form-data`, usually to support file uploads in an AJAX \
+  request."""
 
 The `hx-encoding` attribute allows you to switch the request encoding from the usual `application/x-www-form-urlencoded`
 encoding to `multipart/form-data`, usually to support file uploads in an ajax request.
@@ -913,10 +970,13 @@ The `hx-encoding` tag may be placed on parent elements.
 * `hx-encoding` is inherited and can be placed on a parent element"###,
     "hx-ext" =>
 r###"extensions to use for this element
+description = """\
+  The hx-ext attribute in htmx enables one or more htmx extensions for an element and all its children. You can also \
+  use this attribute to ignore an extension that is enabled by a parent element."""
 
 The `hx-ext` attribute enables an htmx [extension](https://htmx.org/extensions) for an element and all its children.
 
-The value can be a single extension name or a comma separated list of extensions to apply.
+The value can be a single extension name or a comma-separated list of extensions to apply.
 
 The `hx-ext` tag may be placed on parent elements if you want a plugin to apply to an entire swath of the DOM,
 and on the `body` tag for it to apply to all htmx requests.
@@ -936,27 +996,38 @@ hierarchy and it will apply to all child elements.
     ... but it will not be used in this part.
   </div>
 </div>
+```
+```html
+<body hx-ext="preload,morph">
+  "preload" and "morph" extensions are used in this part of the tree...
+</body>
 ```"###,
     "hx-headers" =>
 r###"adds to the headers that will be submitted with the request
+description = """\
+  The hx-headers attribute in htmx allows you to add to the headers that will be submitted with an AJAX request."""
 
-The `hx-headers` attribute allows you to add to the headers that will be submitted with an AJAX request.  
+The `hx-headers` attribute allows you to add to the headers that will be submitted with an AJAX request.
 
-By default, the value of this attribute is a list of name-expression values in [JSON (JavaScript Object Notation)](https://www.json.org/json-en.html) 
+By default, the value of this attribute is a list of name-expression values in [JSON (JavaScript Object Notation)](https://www.json.org/json-en.html)
 format.
 
 If you wish for `hx-headers` to *evaluate* the values given, you can prefix the values with `javascript:` or `js:`.
 
 ```html
   <div hx-get="/example" hx-headers='{"myHeader": "My Value"}'>Get Some HTML, Including A Custom Header in the Request</div>
+
+  <div hx-get="/example" hx-headers='js:{myVal: calculateValue()}'>Get Some HTML, Including a Dynamic Custom Header from Javascript in the Request</div>
 ```
 
 ## Security Considerations
 
-* By default, the value of `hx-headers` must be valid [JSON](https://developer.mozilla.org/en-US/docs/Glossary/JSON). 
+* By default, the value of `hx-headers` must be valid [JSON](https://developer.mozilla.org/en-US/docs/Glossary/JSON).
   It is **not** dynamically computed.  If you use the `javascript:` prefix, be aware that you are introducing
-  security considerations, especially when dealing with user input such as query strings or user-generated content, 
-  which could introduce a [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerability. 
+  security considerations, especially when dealing with user input such as query strings or user-generated content,
+  which could introduce a [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerability.
+
+* Whilst far from being a foolproof solution to [Cross-Site Request Forgery](https://owasp.org/www-community/attacks/csrf), the `hx-headers` attribute can support backend services to provide [CSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html). For more information see the [CSRF Prevention](https://htmx.org/docs/#csrf-prevention) section.
 
 ## Notes
 
@@ -964,6 +1035,10 @@ If you wish for `hx-headers` to *evaluate* the values given, you can prefix the 
 * A child declaration of a header overrides a parent declaration."###,
     "hx-history" =>
 r###"prevent sensitive data being saved to the history cache
+description = """\
+  The hx-history attribute in htmx allows you to prevent sensitive page data from being stored in the browser's \
+  localStorage cache during history navigation, ensuring that the page state is retrieved from the server instead when \
+  navigating through history."""
 
 Set the `hx-history` attribute to `false` on any element in the current document, or any html fragment loaded into the current document by htmx, to prevent sensitive data being saved to the localStorage cache when htmx takes a snapshot of the page state. 
 
@@ -986,6 +1061,9 @@ Here is an example:
 * `hx-history="false"` can be present *anywhere* in the document to embargo the current page state from the history cache (i.e. even outside the element specified for the history snapshot [hx-history-elt](@/attributes/hx-history-elt.md))."###,
     "hx-history-elt" =>
 r###"the element to snapshot and restore during history navigation
+description = """\
+  The hx-history-elt attribute in htmx allows you to specify the element that will be used to snapshot and restore \
+  page state during navigation. In most cases we do not recommend using this element."""
 
 The `hx-history-elt` attribute allows you to specify the element that will be used to snapshot and
 restore page state during navigation.  By default, the `body` tag is used.  This is typically
@@ -1012,6 +1090,7 @@ Here is an example:
 * In most cases we don't recommend narrowing the history snapshot"###,
     "hx-include" =>
 r###"include additional data in requests
+description = "The hx-include attribute in htmx allows you to include additional element values in an AJAX request."
 
 The `hx-include` attribute allows you to include additional element values in an AJAX request. The value of this
 attribute can be:
@@ -1025,7 +1104,7 @@ attribute can be:
 * `next <CSS selector>` which will scan the DOM forward for the first element that matches the given CSS selector.
   (e.g. `next .error` will target the closest following sibling element with `error` class)
 * `previous <CSS selector>` which will scan the DOM backwards for the first element that matches the given CSS selector.
-  (e.g `previous .error` will target the closest previous sibling with `error` class)
+  (e.g. `previous .error` will target the closest previous sibling with `error` class)
 
 Here is an example that includes a separate input value:
 
@@ -1064,6 +1143,10 @@ Note that if you include a non-input element, all input elements enclosed in tha
   include"###,
     "hx-indicator" =>
 r###"the element to put the htmx-request class on during the request
+description = """\
+  The hx-indicator attribute in htmx allows you to specify the element that will have the `htmx-request` class added \
+  to it for the duration of the request. This can be used to show spinners or progress indicators while the request is \
+  in flight."""
 
 The `hx-indicator` attribute allows you to specify the element that will have the `htmx-request` class
 added to it for the duration of the request. This can be used to show spinners or progress indicators
@@ -1150,38 +1233,11 @@ This simulates what a spinner might look like in that situation:
 ```"###,
     "hx-inherit" =>
 r###"control and enable automatic attribute inheritance for child nodes if it has been disabled by default
-
-The default behavior for htmx is to "inherit" many attributes automatically: that is, an attribute such as
-[hx-target](@/attributes/hx-target.md) may be placed on a parent element, and all child elements will inherit
-that target.  Some people do not like this feature and instead prefer to explicitly specify inheritance for attributes.
-
-To support this mode of development, htmx offers the `htmx.config.disableInheritance` setting, which can be set to
-`false` to prevent inheritance from being the default behavior for any of the htmx attributes.
-
-The `hx-inherit` attribute allows you to control the inheritance of attributes manually.
-
-htmx evaluates attribute inheritance as follows:
-
-* when `hx-inherit` is set on a parent node
-  * `inherit="*"` all attribute inheritance for this element will be enabled
-  * `hx-inherit="hx-select hx-get hx-target"` enable inheritance for only one or multiple specified attributes
-
-Here is an example of a div that shares an `hx-target` attribute for a set of anchor tags when `htmx.config.disableInheritance`
-is set to false:
-
-```html
-<div hx-target="#tab-container" hx-inherit="hx-target">
-  <a hx-boost="true" href="/tab1">Tab 1</a>
-  <a hx-boost="true" href="/tab2">Tab 2</a>
-  <a hx-boost="true" href="/tab3">Tab 3</a>
-</div>
-```
-
-## Notes
-
-* Read more about [Attribute Inheritance](@/docs.md#inheritance)"###,
+"###,
     "hx-params" =>
 r###"filters the parameters that will be submitted with a request
+description = """\
+  The hx-params attribute in htmx allows you to filter the parameters that will be submitted with an AJAX request."""
 
 The `hx-params` attribute allows you to filter the parameters that will be submitted with an AJAX request.  
 
@@ -1204,6 +1260,9 @@ and included in the URL, as per usual with a `GET`.
 * `hx-params` is inherited and can be placed on a parent element"###,
     "hx-patch" =>
 r###"issues a PATCH to the specified URL
+description = """\
+  The hx-patch attribute in htmx will cause an element to issue a PATCH request to the specified URL and swap the \
+  returned HTML into the DOM using a swap strategy."""
 
 The `hx-patch` attribute will cause an element to issue a `PATCH` to the specified URL and swap
 the HTML into the DOM using a swap strategy:
@@ -1226,6 +1285,9 @@ This example will cause the `button` to issue a `PATCH` to `/account` and swap t
 * You can control the data submitted with the request in various ways, documented here: [Parameters](@/docs.md#parameters)"###,
     "hx-preserve" =>
 r###"specifies elements to keep unchanged between requests
+description = """\
+  The hx-preserve attribute in htmx allows you to keep an element unchanged during HTML replacement. Elements with \
+  hx-preserve set are preserved by `id` when htmx updates any ancestor element."""
 
 The `hx-preserve` attribute allows you to keep an element unchanged during HTML replacement.
 Elements with `hx-preserve` set are preserved by `id` when htmx updates any ancestor element.
@@ -1256,6 +1318,9 @@ reconciliation
   ```"###,
     "hx-prompt" =>
 r###"shows a prompt() before submitting a request
+description = """\
+  The hx-prompt attribute in htmx allows you to show a prompt before issuing a request. The value of the prompt will \
+  be included in the request in the `HX-Prompt` header."""
 
 The `hx-prompt` attribute allows you to show a prompt before issuing a request.  The value of
 the prompt will be included in the request in the `HX-Prompt` header.
@@ -1273,6 +1338,9 @@ Here is an example:
 * `hx-prompt` is inherited and can be placed on a parent element"###,
     "hx-put" =>
 r###"issues a PUT to the specified URL
+description = """\
+  The hx-put attribute in htmx will cause an element to issue a PUT request to the specified URL and swap the returned \
+  HTML into the DOM using a swap strategy."""
 
 The `hx-put` attribute will cause an element to issue a `PUT` to the specified URL and swap
 the HTML into the DOM using a swap strategy:
@@ -1295,6 +1363,8 @@ This example will cause the `button` to issue a `PUT` to `/account` and swap the
 * You can control the data submitted with the request in various ways, documented here: [Parameters](@/docs.md#parameters)"###,
     "hx-replace-url" =>
 r###"replace the URL in the browser location bar
+description = """\
+  The hx-replace-url attribute in htmx allows you to replace the current URL of the browser location history."""
 
 The `hx-replace-url` attribute allows you to replace the current url of the browser [location history](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 
@@ -1334,6 +1404,9 @@ This will replace the URL `/account/home' in the browser location bar.
   new history entry rather than replacing the current one."###,
     "hx-request" =>
 r###"configures various aspects of the request
+description = """\
+  The hx-request attribute in htmx allows you to configure the request timeout, whether the request will send \
+  credentials, and whether the request will include headers."""
 
 The `hx-request` attribute allows you to configure various aspects of the request via the following attributes:
  
@@ -1362,6 +1435,7 @@ You may make the values dynamically evaluated by adding the `javascript:` or `js
 * `hx-request` is merge-inherited and can be placed on a parent element"###,
     "hx-sync" =>
 r###"control how requests made by different elements are synchronized
+description = "The hx-sync attribute in htmx allows you to synchronize AJAX requests between multiple elements."
 
 The `hx-sync` attribute allows you to synchronize AJAX requests between multiple elements.
 
@@ -1429,6 +1503,9 @@ When implementing active search functionality the hx-trigger attribute's `delay`
 ```"###,
     "hx-validate" =>
 r###"force elements to validate themselves before a request
+description = """\
+  The hx-validate attribute in htmx will cause an element to validate itself using the HTML5 Validation API before it \
+  submits a request."""
 
 The `hx-validate` attribute will cause an element to validate itself by way of the [HTML5 Validation API](@/docs.md#validation)
 before it submits a request.
@@ -1440,6 +1517,10 @@ Only `<form>` elements validate data by default, but other elements do not. Addi
 * `hx-validate` is not inherited"###,
     "hx-vars" =>
 r###"adds values dynamically to the parameters to submit with the request (deprecated, please use hx-vals)
+description = """\
+  The hx-vars attribute in htmx allows you to dynamically add to the parameters that will be submitted with an AJAX \
+  request. This attribute has been deprecated. We recommend you use the hx-vals attribute that provides the same \
+  functionality with safer defaults."""
 
 **NOTE: `hx-vars` has been deprecated in favor of [`hx-vals`](@/attributes/hx-vals.md), which is safer by default.**
 

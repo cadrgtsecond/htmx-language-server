@@ -7,7 +7,9 @@ mkdir -p htmx-docs/attrs
 main=$(cat htmx-docs/main.html || curl -s "https://htmx.org/reference" | tee htmx-docs/main.html)
 
 tables=$(echo "$main" | htmlq '#attributes + p + .info-table, #attributes-additional + p + .info-table' | tr -d '\n')
+echo "$tables"
 data=$(paste -d ':' <(echo "$tables" | htmlq --text 'tbody tr > :first-child') <(echo "$tables" | htmlq --text 'tbody tr > :last-child'))
+echo "$data"
 
 cat > src/htmx.rs <<EOF
 use phf::phf_map;
