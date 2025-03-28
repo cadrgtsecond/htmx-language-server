@@ -6,9 +6,9 @@ use lsp_server::{Connection, RequestId};
 use lsp_server::{Message, Request};
 use lsp_types::{
     CompletionOptions, CompletionParams, DiagnosticOptions, DiagnosticServerCapabilities,
-    DidChangeTextDocumentParams, DidOpenTextDocumentParams, HoverParams, HoverProviderCapability,
-    PositionEncodingKind, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
-    Uri, WorkDoneProgressOptions,
+    DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover, HoverParams,
+    HoverProviderCapability, MarkupKind, Position, PositionEncodingKind, Range, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
 use textstore::TextStore;
 use thiserror::Error;
@@ -57,7 +57,7 @@ fn print_node(node: &Node, parser: &Parser, level: usize) {
     }
 }
 
-fn handle_hover(params: HoverParams, state: &State) -> Result<(), HandleMessageErr> {
+fn handle_hover(id: RequestId, params: HoverParams, state: &State) -> Result<(), HandleMessageErr> {
     let uri = params.text_document_position_params.text_document.uri;
     let file = state
         .textstore
@@ -66,15 +66,50 @@ fn handle_hover(params: HoverParams, state: &State) -> Result<(), HandleMessageE
         .ok_or(HandleMessageErr::BadUri(uri))?;
     let pos = params.text_document_position_params.position;
     let off = file.line_to_offset(pos.line as usize, pos.character as usize);
-    let obj = file.object_under_cursor(off);
+    let Some(obj) = file.object_under_cursor(off) else {
+        // Nothing to handle
+        return Ok(());
+    };
+
+    match obj {
+        textstore::HTMLObject::Tag(_) => {
+            info!("Not implemented yet!");
+        }
+        textstore::HTMLObject::Attr(a) => {
+            let Some(doc) = htmx::DESCRIPTIONS.get(a) else {
+                return Ok(());
+            };
+            state
+                .conn
+                .sender
+                .send(Message::Response(lsp_server::Response {
+                    id,
+                    result: Some(serde_json::to_value(Hover {
+                        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: String::from(*doc),
+                        }),
+                        range: Some(Range {
+                            start: pos,
+                            end: Position {
+                                character: pos.character + a.len() as u32,
+                                ..pos
+                            },
+                        }),
+                    })?),
+                    error: None,
+                })).map_err(|_|  HandleMessageErr::SendError)?;
+        }
+        textstore::HTMLObject::AttrValue(_) => info!("Not implemented yet!"),
+    }
     warn!("Hovering over: {:?}", obj);
     Ok(())
 }
 
 fn handle_completion(
+    id: RequestId,
     params: CompletionParams,
     state: &State,
-    id: RequestId,
 ) -> Result<(), HandleMessageErr> {
     let uri = params.text_document_position.text_document.uri;
     let file = state
@@ -89,10 +124,10 @@ fn handle_message(state: &mut State, msg: Message) -> Result<(), HandleMessageEr
     match msg {
         lsp_server::Message::Request(Request { id, method, params }) => match method.as_str() {
             "textDocument/hover" => {
-                handle_hover(serde_json::from_value(params)?, state)?;
+                handle_hover(id, serde_json::from_value(params)?, state)?;
             }
             "textDocument/completion" => {
-                handle_completion(serde_json::from_value(params)?, state, id)?;
+                handle_completion(id, serde_json::from_value(params)?, state)?;
             }
             _ => {}
         },
