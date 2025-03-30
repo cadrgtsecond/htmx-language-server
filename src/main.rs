@@ -1,12 +1,16 @@
 #![warn(clippy::pedantic)]
 
+use std::ops::Deref;
+
 use itertools::Itertools;
 use log::{error, info, warn};
 use lsp_server::{Connection, RequestId};
 use lsp_server::{Message, Request};
+use lsp_types::request::{Completion};
 use lsp_types::{
-    CompletionOptions, CompletionParams, DiagnosticOptions, DiagnosticServerCapabilities,
-    DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover, HoverParams,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionOptions,
+    CompletionParams, CompletionResponse, DiagnosticOptions, DiagnosticServerCapabilities,
+    DidChangeTextDocumentParams, DidOpenTextDocumentParams, Documentation, Hover, HoverParams,
     HoverProviderCapability, MarkupKind, Position, PositionEncodingKind, Range, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, Uri, WorkDoneProgressOptions,
 };
@@ -98,7 +102,8 @@ fn handle_hover(id: RequestId, params: HoverParams, state: &State) -> Result<(),
                         }),
                     })?),
                     error: None,
-                })).map_err(|_|  HandleMessageErr::SendError)?;
+                }))
+                .map_err(|_| HandleMessageErr::SendError)?;
         }
         textstore::HTMLObject::AttrValue(_) => info!("Not implemented yet!"),
     }
@@ -117,7 +122,62 @@ fn handle_completion(
         .0
         .get(&uri)
         .ok_or(HandleMessageErr::BadUri(uri))?;
-    todo!("Handle completion");
+    let pos = params.text_document_position.position;
+    let off = file.line_to_offset(pos.line as usize, pos.character as usize);
+    info!("Completing: {} {:?}", off, pos);
+    let Some(obj) = file.object_under_cursor(off - 1) else {
+        // Nothing to handle
+        return Ok(());
+    };
+    match obj {
+        textstore::HTMLObject::Tag(_) => {
+            info!("Not implemented yet");
+        }
+        textstore::HTMLObject::Attr(a) => {
+            // TODO: deprecate old attributes
+            let completions: Vec<CompletionItem> = htmx::ATTRIBUTES
+                .iter()
+                .filter(|s| s.starts_with(a))
+                .map(|s| CompletionItem {
+                    label: String::from(*s),
+                    label_details: None,
+                    kind: Some(CompletionItemKind::FIELD),
+                    detail: None,
+                    documentation: htmx::DESCRIPTIONS
+                        .get(*s)
+                        .map(|doc| Documentation::String(String::from(*doc))),
+                    deprecated: None,
+                    preselect: None,
+                    sort_text: None,
+                    filter_text: None,
+                    insert_text: None,
+                    insert_text_format: None,
+                    insert_text_mode: None,
+                    text_edit: None,
+                    additional_text_edits: None,
+                    command: None,
+                    commit_characters: Some(vec![" ".into(), "=".into()]),
+                    data: None,
+                    tags: None,
+                })
+                .collect();
+            state
+                .conn
+                .sender
+                .send(Message::Response(lsp_server::Response {
+                    id,
+                    result: Some(serde_json::to_value(CompletionResponse::Array(
+                        completions,
+                    ))?),
+                    error: None,
+                }))
+                .map_err(|_| HandleMessageErr::SendError)?;
+        }
+        textstore::HTMLObject::AttrValue(_) => {
+            info!("Not implemented yet");
+        }
+    }
+    Ok(())
 }
 
 fn handle_message(state: &mut State, msg: Message) -> Result<(), HandleMessageErr> {
@@ -199,7 +259,7 @@ fn main() {
     info!("Initialized htmx language server");
 
     loop {
-        let msg = state.conn.receiver.recv().unwrap();
+        let msg = state.conn.receiver.recv().expect("Failed to receive message from channel. Cannot continue") ;
         if let Err(err) = handle_message(&mut state, msg) {
             error!("Error while handling message: {:?}", err);
         }
